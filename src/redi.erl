@@ -13,6 +13,7 @@
 	 set/3,
 	 get/2,
 	 delete/2,
+	 get_bucket_name/1,
 	 dump/1,
 	 test/0, heavy_test/0]).
 
