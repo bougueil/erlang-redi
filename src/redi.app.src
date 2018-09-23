@@ -1,0 +1,16 @@
+{application, 'redi',
+ [{description, "a Redis subset with global TTL"},
+  {vsn, "1.0.0"},
+  {registered, []},
+  {applications,
+   [kernel,
+    stdlib
+   ]},
+  {env,[]},
+  {modules, []},
+
+  {maintainers, [
+    "Renaud Mariana"]},
+  {licenses, ["BSD"]},
+  {links, [{"Github", "https://github.com/bougueil/erlang-redi"}]}
+ ]}.
