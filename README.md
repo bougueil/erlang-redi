@@ -10,7 +10,7 @@ __Version:__ 1.0.0.
 
 Erlang REDI implements a small subset of Redis with a global TTL.
 
-The cache is gen_server that could be added to a supervision tree.
+The cache is a gen_server that could be added to a supervision tree.
 
 Usage:
 ------
