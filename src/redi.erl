@@ -30,8 +30,9 @@
 -define(ENTRY_TTL, 3600000).     %% 1hour
 -define(GC_INTERVAL_MS, 30000).
 -define(BUCKET_NAME, redi_keys).
+-define(BUCKET_TYPE, set).
 
--record(state, {gc, next_gc_ms, entry_ttl_ms, bucket_name}).
+-record(state, {next_gc_ms, entry_ttl_ms, bucket_name, gc}).
 
 
 -spec start_link() -> {ok, Pid :: pid()} |
@@ -90,8 +91,10 @@ dump(Pid) ->
 init([Opts]) ->
     process_flag(trap_exit, true),
     Bucket_name = maps:get(bucket_name, Opts, ?BUCKET_NAME),
+    Bucket_type = maps:get(bucket_type, Opts, ?BUCKET_TYPE),
     Next_gc_ms = maps:get(next_gc_ms, Opts, ?GC_INTERVAL_MS),
-    ets:new(Bucket_name, [bag, public, {keypos, 1}, named_table, {heir, none},
+    Next_gc_ms = maps:get(next_gc_ms, Opts, ?GC_INTERVAL_MS),
+    ets:new(Bucket_name, [Bucket_type, public, {keypos, 1}, named_table, {heir, none},
 			     {write_concurrency, false}, {read_concurrency, true}]),
     erlang:send_after(Next_gc_ms, self(), refresh_gc),
     {ok, #state{
