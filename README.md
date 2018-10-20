@@ -21,12 +21,12 @@ $ rebar3 shell
 
 ```erlang
 
-  Bucket = test,
-  {ok, Pid} = redi:start_link(#{bucket_name => Bucket,
-			       entry_ttl_ms=> 30000}),
+Bucket = test,
+{ok, Pid} = redi:start_link(#{bucket_name => Bucket,
+		       entry_ttl_ms=> 30000}),
 
-  redi:set(Pid, <<"aaa">>, <<"data.aaa1">>), 
-  redi:set(Pid, <<"aaa">>, <<"data.aaa2">>), 
+redi:set(Pid, <<"aaa">>, <<"data.aaa1">>), 
+redi:set(Pid, <<"aaa">>, <<"data.aaa2">>), 
 redi:set(Pid, <<"bbb">>, <<"data.xxl">>),
 redi:delete(Pid, <<"bbb">>),
 redi:get(Bucket, <<"aaa">>),
