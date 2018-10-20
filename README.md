@@ -19,14 +19,15 @@ Its usage is very simple.
 
 ```erlang
 
-{ok, Pid} = redi:start_link(#{bucket_name => test,
+Bucket = test,
+{ok, Pid} = redi:start_link(#{bucket_name => Bucket,
 			       entry_ttl_ms=> 30000}),
 
 redi:set(Pid, <<"aaa">>, <<"data.aaa1">>), 
 redi:set(Pid, <<"aaa">>, <<"data.aaa2">>), 
 redi:set(Pid, <<"bbb">>, <<"data.xxl">>),
 redi:delete(Pid, <<"bbb">>),
-redi:get(test, <<"aaa">>),
+redi:get(Bucket, <<"aaa">>),
 
 ...
 ```
@@ -34,9 +35,10 @@ redi:get(test, <<"aaa">>),
 ## Documentation
 
 
-## Build
+## Build && Run
 
 ```
 $ rebar3 compile
+$ rebar3 shell
 ```
 
