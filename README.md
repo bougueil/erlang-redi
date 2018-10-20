@@ -19,7 +19,7 @@ Its usage is very simple.
 
 ```erlang
 
-{ok, Cache} = redi:start_link(#{bucket_name => test,
+{ok, Pid} = redi:start_link(#{bucket_name => test,
 			       entry_ttl_ms=> 30000}),
 
 redi:set(Pid, <<"aaa">>, <<"data.aaa1">>), 
