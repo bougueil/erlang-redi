@@ -239,14 +239,22 @@ test() ->
 
 heavy_test() ->
     {ok, Pid} = redi:start_link(#{bucket_name => test,
-				       next_gc_ms => 10000,
-				       entry_ttl_ms=> 30000}),
+				  next_gc_ms => 10000,
+				  entry_ttl_ms=> 30000}),
     N = 200000,
-    [begin
-	 redi:set(Pid, <<I:40>>, {<<"data.", <<I:40>>/binary >>})
-     end || I <- lists:seq(1, N)],
-    Pid.
-    
+    Fwrite = fun() ->
+		     [redi:set(Pid, <<I:40>>, {<<"data.", <<I:40>>/binary >>})
+		      || I <- lists:seq(1, N)]
+	     end,
+    Fread = fun() ->
+		    [redi:get(test, <<I:40>>) || I <- lists:seq(1, N)]
+	    end,
+
+    {Twrite, _} = timer:tc(Fwrite),
+    io:format("throughput writes: ~p /s.~n", [N * 1000000 div Twrite]),
+    {Tread, _} = timer:tc(Fread),
+    io:format("throughput reads: ~p /s.~n", [N * 1000000 div Tread]).
+
 create_bucket(Bucket_name, Bucket_type) ->
     ets:new(Bucket_name, [Bucket_type, named_table, {read_concurrency, true}]).
 %% redi:delete(Pid, <<100000:40>>).
