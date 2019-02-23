@@ -10,10 +10,10 @@
 %% API
 -export([start_link/1,
 	 start_link/0,
-	 set/3,
+	 set/3, set/4,
 	 get/2,
 	 delete/2,
-	 get_bucket_name/1,
+	 get_bucket_name/1, add_bucket/2, add_bucket/3,
 	 dump/1,
 	 test/0, heavy_test/0]).
 
@@ -33,6 +33,7 @@
 -define(BUCKET_TYPE, set).
 
 -record(state, {next_gc_ms, entry_ttl_ms, bucket_name, gc}).
+
 
 
 -spec start_link() -> {ok, Pid :: pid()} |
@@ -67,6 +68,15 @@ get(Bucket_name, Key) ->
 set(Pid, Key, Value) ->
     gen_server:call(Pid, {set, Key, Value}).
 
+-spec set(Gen_server :: pid(), Key :: term(), Value :: term(), Bucket_name ::atom()) -> ok.
+set(Pid, Key, Value, Bucket_name) when is_atom(Bucket_name) ->
+    case ets:info(Bucket_name) of
+	undefined ->
+	    {error, undefined_bucket};
+	_ ->
+	    gen_server:call(Pid, {set, Key, Value, Bucket_name})
+    end.
+
 %% @doc get bucket name. Default is redi_keys
 %% the bucket name is required by get/2
 -spec get_bucket_name(Gen_server :: pid()) -> atom().
@@ -75,6 +85,12 @@ get_bucket_name(Pid) ->
 
 dump(Pid) ->
     gen_server:call(Pid, dump).
+
+add_bucket(Pid, Bucket_name) ->
+   add_bucket(Pid, Bucket_name, ?BUCKET_TYPE).
+
+add_bucket(Pid, Bucket_name, Bucket_type) ->
+    gen_server:call(Pid, {add_bucket, Bucket_name, Bucket_type}).
 
 
 %%====================================================================
@@ -93,9 +109,7 @@ init([Opts]) ->
     Bucket_name = maps:get(bucket_name, Opts, ?BUCKET_NAME),
     Bucket_type = maps:get(bucket_type, Opts, ?BUCKET_TYPE),
     Next_gc_ms = maps:get(next_gc_ms, Opts, ?GC_INTERVAL_MS),
-    Next_gc_ms = maps:get(next_gc_ms, Opts, ?GC_INTERVAL_MS),
-    ets:new(Bucket_name, [Bucket_type, public, {keypos, 1}, named_table, {heir, none},
-			     {write_concurrency, false}, {read_concurrency, true}]),
+    create_bucket(Bucket_name, Bucket_type),
     erlang:send_after(Next_gc_ms, self(), refresh_gc),
     {ok, #state{
 	    next_gc_ms = Next_gc_ms,
@@ -120,10 +134,19 @@ handle_call({set, Key, Value}, _From, #state{gc=GC, bucket_name=Bucket_name}=Sta
     ets:insert(Bucket_name, {Key, Value}),
     {reply, ok, State#state{gc=NewGC}};
 
+handle_call({set, Key, Value, Bucket_name}, _From, #state{gc=GC}=State) ->
+    NewGC = do_insert_gc(?ts_ms(), Key, GC),
+    ets:insert(Bucket_name, {Key, Value}),
+    {reply, ok, State#state{gc=NewGC}};
+
 handle_call(dump, _From, #state{gc=GC, bucket_name=Bucket_name}=State) ->
     {reply, {ets:tab2list(Bucket_name), queue:len(GC)}, State};
 
 handle_call(get_bucket_name, _From, #state{bucket_name=Bucket_name}=State) ->
+    {reply, Bucket_name, State};
+
+handle_call({add_bucket, Bucket_name, Bucket_type}, _From, State) ->
+    create_bucket(Bucket_name, Bucket_type),
     {reply, Bucket_name, State};
 
 handle_call({delete, Key}, _From, #state{gc=GC, bucket_name=Bucket_name}=State) ->
@@ -219,6 +242,9 @@ heavy_test() ->
      end || I <- lists:seq(1, N)],
     Pid.
     
+create_bucket(Bucket_name, Bucket_type) ->
+    ets:new(Bucket_name, [Bucket_type, public, named_table, {heir, none},
+			     {write_concurrency, false}, {read_concurrency, true}]).
 %% redi:delete(Pid, <<100000:40>>).
 %% redi:get(test, <<100000:40>>).
 %% redi:get(test, <<100100:40>>).
