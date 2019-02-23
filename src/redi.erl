@@ -225,11 +225,16 @@ test() ->
     redi:set(Pid, <<"ccc">>, {<<"data.ccc1">>, #{}, #{}}), 
     redi:set(Pid, <<"ccc">>, {<<"data.ccc2">>, #{}, #{}}), 
     redi:set(Pid, <<"ddd">>, {<<"data.ccc">>, #{}, #{}}),
+    [{<<"aaa">>, {<<"data.aaa2">>, #{}, #{}}}] = redi:get(test, <<"aaa">>),
     redi:delete(Pid, <<"aaa">>), 
 
     redi:dump(Pid) ,   
-    redi:get(test, <<"aaa">>) ,
+    [] = redi:get(test, <<"aaa">>) ,
     redi:dump(Pid),
+
+    redi:add_bucket(Pid, another_bucket, bag),
+    redi:set(Pid, <<"aaa">>, <<"data.aaay">>, another_bucket),
+    [{<<"aaa">>,<<"data.aaay">>}] = redi:get(another_bucket, <<"aaa">>),
     ok.
 
 heavy_test() ->
@@ -238,13 +243,12 @@ heavy_test() ->
 				       entry_ttl_ms=> 30000}),
     N = 200000,
     [begin
-	 redi:set(Pid, <<I:40>>, {<<"data.", <<I:40>>/binary >>, #{}, #{}})
+	 redi:set(Pid, <<I:40>>, {<<"data.", <<I:40>>/binary >>})
      end || I <- lists:seq(1, N)],
     Pid.
     
 create_bucket(Bucket_name, Bucket_type) ->
-    ets:new(Bucket_name, [Bucket_type, public, named_table, {heir, none},
-			     {write_concurrency, false}, {read_concurrency, true}]).
+    ets:new(Bucket_name, [Bucket_type, named_table, {read_concurrency, true}]).
 %% redi:delete(Pid, <<100000:40>>).
 %% redi:get(test, <<100000:40>>).
 %% redi:get(test, <<100100:40>>).
