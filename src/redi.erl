@@ -8,8 +8,7 @@
 -behaviour(gen_server).
 
 %% API
--export([start_link/1,
-	 start_link/0,
+-export([start_link/0, start_link/1, start_link/2,
 	 set/3, set/4,
 	 get/2,
 	 delete/2,
@@ -36,6 +35,7 @@
 
 
 
+
 -spec start_link() -> {ok, Pid :: pid()} |
 		      {error, Error :: {already_started, pid()}} |
 		      {error, Error :: term()} |
@@ -43,18 +43,29 @@
 start_link() ->
     start_link(#{}).
 
+-spec start_link(atom() | map() ) -> {ok, Pid :: pid()} |
+		      {error, Error :: {already_started, pid()}} |
+		      {error, Error :: term()} |
+		      ignore.
+start_link(Name) when is_atom(Name) ->
+    start_link(Name, #{});
+start_link(Opts) when is_map(Opts) ->
+    start_link(?SERVER, Opts).
+
+
 %% @doc creates an REDI cache 
 %% Options are:
 %%  - `bucket_name' name of the ets table (used by get)
 %%  - `entry_ttl_ms' the time to live of REDI elements
 %%  - `next_gc_ms' next interval time REDI will scan to remove oldest elements
 %%
--spec start_link(map()) -> {ok, Pid :: pid()} |
+
+-spec start_link(atom(), map()) -> {ok, Pid :: pid()} |
 		      {error, Error :: {already_started, pid()}} |
 		      {error, Error :: term()} |
 		      ignore.
-start_link(Opts) ->
-    gen_server:start_link({local, ?SERVER}, ?MODULE, [Opts], []).
+start_link(Name, Opts) ->
+    gen_server:start_link({local, Name}, ?MODULE, [Opts], []).
 
 -spec delete(Gen_server :: pid(), Key :: term()) -> ok.
 delete(Pid, Key) ->
