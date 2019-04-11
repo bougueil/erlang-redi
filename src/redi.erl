@@ -9,12 +9,12 @@
 
 %% API
 -export([start_link/0, start_link/1, start_link/2,
+	 stop/1,
 	 set/3, set/4,
 	 get/2,
-	 delete/2,
+	 delete/2, size/1,
 	 get_bucket_name/1, add_bucket/2, add_bucket/3,
-	 dump/1,
-	 test/0, heavy_test/0]).
+	 dump/1]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -52,6 +52,8 @@ start_link(Name) when is_atom(Name) ->
 start_link(Opts) when is_map(Opts) ->
     start_link(?SERVER, Opts).
 
+stop(Name) ->
+      gen_server:stop(Name).
 
 %% @doc creates an REDI cache 
 %% Options are:
@@ -74,6 +76,10 @@ delete(Pid, Key) ->
 -spec get(Bucket_name :: atom(), Key :: term()) -> list().
 get(Bucket_name, Key) ->
     ets:lookup(Bucket_name, Key).
+
+-spec size(Bucket_name :: atom()) -> pos_integer().
+size(Bucket_name) ->
+    ets:info(Bucket_name, size).
 
 -spec set(Gen_server :: pid(), Key :: term(), Value :: term()) -> ok.
 set(Pid, Key, Value) ->
@@ -225,49 +231,64 @@ clean_older0(T_gc_ms, State) ->
 	    State
     end.
 
-test() ->
-    {ok, Pid} = redi:start_link(#{bucket_name => test,
-				       next_gc_ms => 10000,
-				       entry_ttl_ms=> 30000}),
-    redi:set(Pid, <<"aaa">>, {<<"data.aaa1">>, #{}, #{}}), 
-    redi:set(Pid, <<"aaa">>, {<<"data.aaa2">>, #{}, #{}}), 
-    redi:set(Pid, <<"bbb">>, {<<"data.aaa">>, #{}, #{}}),
-    
-    redi:set(Pid, <<"ccc">>, {<<"data.ccc1">>, #{}, #{}}), 
-    redi:set(Pid, <<"ccc">>, {<<"data.ccc2">>, #{}, #{}}), 
-    redi:set(Pid, <<"ddd">>, {<<"data.ccc">>, #{}, #{}}),
-    [{<<"aaa">>, {<<"data.aaa2">>, #{}, #{}}}] = redi:get(test, <<"aaa">>),
-    redi:delete(Pid, <<"aaa">>), 
 
-    redi:dump(Pid) ,   
-    [] = redi:get(test, <<"aaa">>) ,
-    redi:dump(Pid),
-
-    redi:add_bucket(Pid, another_bucket, bag),
-    redi:set(Pid, <<"aaa">>, <<"data.aaay">>, another_bucket),
-    [{<<"aaa">>,<<"data.aaay">>}] = redi:get(another_bucket, <<"aaa">>),
-    ok.
-
-heavy_test() ->
-    {ok, Pid} = redi:start_link(#{bucket_name => test,
-				  next_gc_ms => 10000,
-				  entry_ttl_ms=> 30000}),
-    N = 200000,
-    Fwrite = fun() ->
-		     [redi:set(Pid, <<I:40>>, {<<"data.", <<I:40>>/binary >>})
-		      || I <- lists:seq(1, N)]
-	     end,
-    Fread = fun() ->
-		    [redi:get(test, <<I:40>>) || I <- lists:seq(1, N)]
-	    end,
-
-    {Twrite, _} = timer:tc(Fwrite),
-    io:format("throughput writes: ~p /s.~n", [N * 1000000 div Twrite]),
-    {Tread, _} = timer:tc(Fread),
-    io:format("throughput reads: ~p /s.~n", [N * 1000000 div Tread]).
 
 create_bucket(Bucket_name, Bucket_type) ->
     ets:new(Bucket_name, [Bucket_type, named_table, {read_concurrency, true}]).
-%% redi:delete(Pid, <<100000:40>>).
-%% redi:get(test, <<100000:40>>).
-%% redi:get(test, <<100100:40>>).
+
+
+-ifdef(TEST).
+-include_lib("eunit/include/eunit.hrl").
+
+redi_test() ->
+    Bucket_name = test,
+    TTL = 500,
+    {ok, Pid} = redi:start_link(#{bucket_name => Bucket_name,
+				  next_gc_ms => 100,
+				  entry_ttl_ms=> TTL}),
+    redi:set(Pid, <<"aaa">>, {<<"data.aaa1">>, #{}, #{}}), 
+    redi:set(Pid, <<"aaa">>, {<<"data.aaa2">>, #{}, #{}}), 
+    redi:set(Pid, <<"bbb">>, {<<"data.aaa">>, #{}, #{}}),
+
+    redi:set(Pid, <<"ccc">>, {<<"data.ccc1">>, #{}, #{}}), 
+    redi:set(Pid, <<"ccc">>, {<<"data.ccc2">>, #{}, #{}}), 
+    redi:set(Pid, <<"ddd">>, {<<"data.ccc">>, #{}, #{}}),
+    [{<<"aaa">>, {<<"data.aaa2">>, #{}, #{}}}] = redi:get(Bucket_name, <<"aaa">>),
+    redi:delete(Pid, <<"aaa">>), 
+
+    ?assertEqual(redi:get(Bucket_name, <<"aaa">>), []),
+    ?assertEqual(redi:size(Bucket_name), 3),
+
+    %% data expires after TTL
+     timer:sleep(TTL+100),
+    ?assertEqual(redi:size(Bucket_name), 0),
+    ?assertEqual(redi:get(Bucket_name, <<"aaa">>), []),
+
+    %% multi buckets
+    redi:add_bucket(Pid, another_bucket, bag),
+    redi:set(Pid, <<"aaa">>, <<"data.aaay">>, another_bucket),
+    ?assertEqual(redi:get(another_bucket, <<"aaa">>), [{<<"aaa">>,<<"data.aaay">>}]),
+    redi:stop(Pid).
+
+heavy_test() ->
+    Pid_name = heavy_redi,
+    Bucket_name = test,
+    {ok, _Pid} = redi:start_link(Pid_name,
+				#{bucket_name => Bucket_name,
+				  next_gc_ms => 10000,
+				  entry_ttl_ms=> 30000}),
+    N = 200000,
+    Fun_writes = fun() ->
+		     [redi:set(Pid_name, <<I:40>>, {<<"data.", <<I:40>>/binary >>})
+		      || I <- lists:seq(1, N)]
+	     end,
+    Fun_reads = fun() ->
+		    [redi:get(Bucket_name, <<I:40>>) || I <- lists:seq(1, N)]
+	    end,
+
+    {Twrite, _} = timer:tc(Fun_writes),
+    ?debugFmt("throughput ~p writes/s.", [N * 1000000 div Twrite]),
+    {Tread, _} = timer:tc(Fun_reads),
+    ?debugFmt("throughput ~p reads/s.", [N * 1000000 div Tread]),
+    redi:stop(Pid_name).
+-endif.
