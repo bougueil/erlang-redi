@@ -1,15 +1,16 @@
 
 
-# Erlang REDI: a local cache with a fixed TTL "a la Redis" . #
+# Erlang and Elixir REDI: a local cache "a la Redis" . #
 
-Copyright (c) 2018 Renaud Mariana.
+Copyright (c) 2019 Renaud Mariana.
 
 __Version:__ 1.0.0.
 
-## Erlang REDI
+## Erlang and Elixir REDI
 
-Erlang REDI implements a local cache with a fixed TTL.
-An entriy TTL is not refreshed when the entry re-enters the cache.
+Erlang and Elixir REDI implements a local cache with TTL.
+
+An entry TTL is not updated when the entry re-enters the cache.
 
 The cache is a gen_server that could be added to a supervision tree.
 
@@ -38,7 +39,6 @@ redi:set(Pid, <<"aaa">>, <<"data.aaay">>, another_bucket),
 redi:get(another_bucket, <<"aaa">>).
 ...
 ```
-
-## Documentation
+$ rebar3 eunit
 
 
