@@ -146,10 +146,8 @@ init([Opts]) ->
 			 {stop, Reason :: term(), Reply :: term(), NewState :: term()} |
 			 {stop, Reason :: term(), NewState :: term()}.
 
-handle_call({set, Key, Value}, _From, #state{gc=GC, bucket_name=Bucket_name}=State) ->
-    NewGC = do_insert_gc(?ts_ms(), Key, GC),
-    ets:insert(Bucket_name, {Key, Value}),
-    {reply, ok, State#state{gc=NewGC}};
+handle_call({set, Key, Value}, From, State) ->
+    handle_call({set, Key, Value, State#state.bucket_name}, From, State);
 
 handle_call({set, Key, Value, Bucket_name}, _From, #state{gc=GC}=State) ->
     NewGC = do_insert_gc(?ts_ms(), Key, GC),
@@ -189,9 +187,9 @@ handle_cast(_Request, State) ->
 			 {noreply, NewState :: term(), hibernate} |
 			 {stop, Reason :: normal | term(), NewState :: term()}.
 handle_info(refresh_gc, #state{entry_ttl_ms=TTL}=State) ->
+    erlang:send_after(State#state.next_gc_ms, self(), refresh_gc),
     T_gc_ms = ?ts_ms() - TTL,
     State2 = clean_older0(T_gc_ms, State),
-    erlang:send_after(State#state.next_gc_ms, self(), refresh_gc),
 {noreply, State2}.
 
 %% @private
@@ -240,34 +238,36 @@ create_bucket(Bucket_name, Bucket_type) ->
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
 
+
 redi_test() ->
     Bucket_name = test,
     TTL = 500,
     {ok, Pid} = redi:start_link(#{bucket_name => Bucket_name,
 				  next_gc_ms => 100,
 				  entry_ttl_ms=> TTL}),
-    redi:set(Pid, <<"aaa">>, {<<"data.aaa1">>, #{}, #{}}), 
-    redi:set(Pid, <<"aaa">>, {<<"data.aaa2">>, #{}, #{}}), 
-    redi:set(Pid, <<"bbb">>, {<<"data.aaa">>, #{}, #{}}),
+    redi:set(Pid, <<"aaa">>, some_data),
+    redi:set(Pid, <<"aaa">>, some_data2),
+    redi:set(Pid, <<"bbb">>, some_data),
 
-    redi:set(Pid, <<"ccc">>, {<<"data.ccc1">>, #{}, #{}}), 
-    redi:set(Pid, <<"ccc">>, {<<"data.ccc2">>, #{}, #{}}), 
-    redi:set(Pid, <<"ddd">>, {<<"data.ccc">>, #{}, #{}}),
-    [{<<"aaa">>, {<<"data.aaa2">>, #{}, #{}}}] = redi:get(Bucket_name, <<"aaa">>),
+    redi:set(Pid, <<"ccc">>, some_data),
+    redi:set(Pid, <<"ccc">>, some_data2),
+    redi:set(Pid, <<"ddd">>, some_data),
+    [{<<"aaa">>, some_data2}] = redi:get(Bucket_name, <<"aaa">>),
     redi:delete(Pid, <<"aaa">>), 
 
     ?assertEqual(redi:get(Bucket_name, <<"aaa">>), []),
     ?assertEqual(redi:size(Bucket_name), 3),
 
     %% data expires after TTL
-     timer:sleep(TTL+100),
+    timer:sleep(TTL+100),
     ?assertEqual(redi:size(Bucket_name), 0),
     ?assertEqual(redi:get(Bucket_name, <<"aaa">>), []),
 
     %% multi buckets
     redi:add_bucket(Pid, another_bucket, bag),
-    redi:set(Pid, <<"aaa">>, <<"data.aaay">>, another_bucket),
-    ?assertEqual(redi:get(another_bucket, <<"aaa">>), [{<<"aaa">>,<<"data.aaay">>}]),
+    redi:set(Pid, <<"aaa">>, some_data, another_bucket),
+    ?assertEqual(redi:get(another_bucket, <<"aaa">>), [{<<"aaa">>, some_data}]),
+
     redi:stop(Pid).
 
 heavy_test() ->
@@ -277,7 +277,7 @@ heavy_test() ->
 				#{bucket_name => Bucket_name,
 				  next_gc_ms => 10000,
 				  entry_ttl_ms=> 30000}),
-    N = 200000,
+    N = 20000,
     Fun_writes = fun() ->
 		     [redi:set(Pid_name, <<I:40>>, {<<"data.", <<I:40>>/binary >>})
 		      || I <- lists:seq(1, N)]
@@ -291,4 +291,22 @@ heavy_test() ->
     {Tread, _} = timer:tc(Fun_reads),
     ?debugFmt("throughput ~p reads/s.", [N * 1000000 div Tread]),
     redi:stop(Pid_name).
+
+redi_2_set_test() ->
+    Bucket_name = test,
+    TTL = 1000,
+    {ok, Pid} = redi:start_link(#{bucket_name => Bucket_name,
+				  next_gc_ms => 100,
+				  entry_ttl_ms=> TTL}),
+
+    redi:set(Pid, <<"aaa">>, some_data),
+    timer:sleep(800),
+    redi:set(Pid, <<"aaa">>, some_data1),
+    timer:sleep(300),
+    redi:set(Pid, <<"aaa">>, some_data2),
+    ?assertEqual(redi:dump(Pid), {[{<<"aaa">>,some_data2}],2}),
+    timer:sleep(800),
+    ?assertEqual(redi:dump(Pid), {[],1}),
+    redi:stop(Pid).
+
 -endif.

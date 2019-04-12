@@ -11,10 +11,19 @@ __Version:__ 1.0.0.
 Erlang and Elixir REDI implements a local cache with TTL.
 
 An entry TTL is not updated when the entry re-enters the cache.
+The typical usage is
+```
+case redi:get(..) of
+     ..something_udefined.. ->
+       ..get the value from slow storage
+       redi:set(..)
+     ..the_value -> .. use the value ...
+end
+```
 
 The cache is a gen_server that could be added to a supervision tree.
 
-Usage:
+Example:
 ------
 
 Its usage is very simple.
