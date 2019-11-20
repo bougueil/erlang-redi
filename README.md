@@ -50,4 +50,30 @@ redi:get(another_bucket, <<"aaa">>).
 ```
 $ rebar3 eunit
 
+elixir:
+------
 
+mix.exs
+
+```erlang
+      {:redi, git: "git://github.com/bougueil/erlang-redi", app: false},
+```
+
+application.ex 
+start redi inside a supervisor :
+
+ ```erlang
+ children = [
+     ...,
+     %{
+        id: :redi_id,
+        start:
+          {:redi, :start_link,
+           [
+             :mycache,  # the redi gen_server process name
+             %{bucket_name: :my_bucket_name, entry_ttl_ms: :timer.seconds(4000)}
+           ]}
+      },
+      ...
+  ]
+```      
