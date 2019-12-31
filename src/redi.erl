@@ -14,7 +14,7 @@
 	 get/2,
 	 delete/2, size/1,
 	 get_bucket_name/1, add_bucket/2, add_bucket/3,
-	 dump/1]).
+	 gc_client/2, dump/1]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -31,7 +31,7 @@
 -define(BUCKET_NAME, redi_keys).
 -define(BUCKET_TYPE, set).
 
--record(state, {next_gc_ms, entry_ttl_ms, bucket_name, gc}).
+-record(state, {next_gc_ms, entry_ttl_ms, bucket_name, gc, gc_client}).
 
 
 
@@ -72,6 +72,10 @@ start_link(Name, Opts) ->
 -spec delete(Gen_server :: pid(), Key :: term()) -> ok.
 delete(Pid, Key) ->
     gen_server:call(Pid, {delete, Key}).
+
+-spec gc_client(Gen_server :: pid(), Client :: pid()) -> ok.
+gc_client(Redi_pid, Client_pid) when is_pid(Client_pid) ->
+    gen_server:call(Redi_pid, {gc_client, Client_pid}).
 
 -spec get(Bucket_name :: atom(), Key :: term()) -> list().
 get(Bucket_name, Key) ->
@@ -164,6 +168,9 @@ handle_call({add_bucket, Bucket_name, Bucket_type}, _From, State) ->
     create_bucket(Bucket_name, Bucket_type),
     {reply, Bucket_name, State};
 
+handle_call({gc_client, Pid}, _From, State) ->
+    {reply, ok,  State#state{gc_client=Pid}};
+
 handle_call({delete, Key}, _From, #state{gc=GC, bucket_name=Bucket_name}=State) ->
     ets:delete(Bucket_name, Key),
     NewGC = queue:from_list(lists:keydelete(Key, 2, queue:to_list(GC))),
@@ -189,7 +196,7 @@ handle_cast(_Request, State) ->
 handle_info(refresh_gc, #state{entry_ttl_ms=TTL}=State) ->
     erlang:send_after(State#state.next_gc_ms, self(), refresh_gc),
     T_gc_ms = ?ts_ms() - TTL,
-    State2 = clean_older0(T_gc_ms, State),
+    State2 = clean_older0(T_gc_ms, [], State),
 {noreply, State2}.
 
 %% @private
@@ -216,18 +223,26 @@ do_insert_gc(Ts, Key, GC) when Ts  <  ?ts_non_gc ->
     queue:in({Ts,Key}, GC);
 do_insert_gc(_Ts, _Key, GC) -> GC.
 
-clean_older0(T_gc_ms, State) ->
+clean_older0(T_gc_ms, Acc, State) ->
 
     case queue:peek(State#state.gc) of
 	empty ->
-	    State;
+	    terminate_clean_older(Acc, State);
 	{value, _V ={Ts, Key}} when Ts < T_gc_ms ->
 	    ets:delete(State#state.bucket_name, Key),
 	    GC1 = queue:drop(State#state.gc),
-	    clean_older0(T_gc_ms, State#state{gc = GC1});
+	    clean_older0(T_gc_ms, [Key|Acc], State#state{gc = GC1});
 	{value, _V}  ->
-	    State
+	    terminate_clean_older(Acc, State)
     end.
+
+terminate_clean_older(_Keys, #state{gc_client=undefined}=State) ->
+    State;
+terminate_clean_older([], State) ->
+    State;
+terminate_clean_older(Keys, #state{gc_client=Pid, bucket_name=Bucket}=State) ->
+    erlang:send(Pid, {redi_gc, Bucket, Keys}),
+    State.
 
 
 
@@ -245,6 +260,7 @@ redi_test() ->
     {ok, Pid} = redi:start_link(#{bucket_name => Bucket_name,
 				  next_gc_ms => 100,
 				  entry_ttl_ms=> TTL}),
+    redi:gc_client(Pid, self()),
     redi:set(Pid, <<"aaa">>, some_data),
     redi:set(Pid, <<"aaa">>, some_data2),
     redi:set(Pid, <<"bbb">>, some_data),
@@ -258,8 +274,12 @@ redi_test() ->
     ?assertEqual(redi:get(Bucket_name, <<"aaa">>), []),
     ?assertEqual(redi:size(Bucket_name), 3),
 
-    %% data expires after TTL
-    timer:sleep(TTL+100),
+    %% wait data expiration
+    receive
+	{redi_gc, _, Keys} = Msg ->
+	    ?assertEqual(length(Keys), 5)
+    end,
+
     ?assertEqual(redi:size(Bucket_name), 0),
     ?assertEqual(redi:get(Bucket_name, <<"aaa">>), []),
 
