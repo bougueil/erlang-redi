@@ -223,15 +223,29 @@ do_insert_gc(Ts, Key, GC) when Ts  <  ?ts_non_gc ->
     queue:in({Ts,Key}, GC);
 do_insert_gc(_Ts, _Key, GC) -> GC.
 
+clean_older0(T_gc_ms, Acc, #state{gc_client= undefined}= State) ->
+
+    case queue:peek(State#state.gc) of
+	empty ->
+	    State;
+	{value, _V ={Ts, Key}} when Ts < T_gc_ms ->
+	    ets:delete(State#state.bucket_name, Key),
+	    GC1 = queue:drop(State#state.gc),
+	    clean_older0(T_gc_ms, Acc, State#state{gc = GC1});
+	{value, _V}  ->
+	     State
+    end;
+
 clean_older0(T_gc_ms, Acc, State) ->
 
     case queue:peek(State#state.gc) of
 	empty ->
 	    terminate_clean_older(Acc, State);
 	{value, _V ={Ts, Key}} when Ts < T_gc_ms ->
+	    Val = get(State#state.bucket_name, Key),
 	    ets:delete(State#state.bucket_name, Key),
 	    GC1 = queue:drop(State#state.gc),
-	    clean_older0(T_gc_ms, [Key|Acc], State#state{gc = GC1});
+	    clean_older0(T_gc_ms, [{Key, Val}|Acc], State#state{gc = GC1});
 	{value, _V}  ->
 	    terminate_clean_older(Acc, State)
     end.
