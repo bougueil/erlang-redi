@@ -14,7 +14,8 @@
 	 get/2,
 	 delete/2, size/1,
 	 get_bucket_name/1, add_bucket/2, add_bucket/3,
-	 gc_client/2, dump/1]).
+	 gc_client/2, gc_client/3,
+	 dump/1]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -75,7 +76,11 @@ delete(Pid, Key) ->
 
 -spec gc_client(Gen_server :: pid(), Client :: pid()) -> ok.
 gc_client(Redi_pid, Client_pid) when is_pid(Client_pid) ->
-    gen_server:call(Redi_pid, {gc_client, Client_pid}).
+    gc_client(Redi_pid, Client_pid, #{returns => key}).
+
+-spec gc_client(Gen_server :: pid(), Client :: pid(), Opts :: maps:maps()) -> ok.
+gc_client(Redi_pid, Client_pid, Opts) when is_pid(Client_pid), is_map(Opts) ->
+    gen_server:call(Redi_pid, {gc_client, Client_pid, maps:get(returns, Opts)}).
 
 -spec get(Bucket_name :: atom(), Key :: term()) -> list().
 get(Bucket_name, Key) ->
@@ -168,8 +173,8 @@ handle_call({add_bucket, Bucket_name, Bucket_type}, _From, State) ->
     create_bucket(Bucket_name, Bucket_type),
     {reply, Bucket_name, State};
 
-handle_call({gc_client, Pid}, _From, State) ->
-    {reply, ok,  State#state{gc_client=Pid}};
+handle_call({gc_client, Pid, TypeReturns}, _From, State) ->
+    {reply, ok,  State#state{gc_client={Pid, TypeReturns}}};
 
 handle_call({delete, Key}, _From, #state{gc=GC, bucket_name=Bucket_name}=State) ->
     ets:delete(Bucket_name, Key),
@@ -236,26 +241,31 @@ clean_older0(T_gc_ms, Acc, #state{gc_client= undefined}= State) ->
 	     State
     end;
 
-clean_older0(T_gc_ms, Acc, State) ->
+clean_older0(T_gc_ms, Acc, #state{gc_client= {_, TypeReturns}} = State) ->
 
     case queue:peek(State#state.gc) of
 	empty ->
 	    terminate_clean_older(Acc, State);
 	{value, _V ={Ts, Key}} when Ts < T_gc_ms ->
-	    Val = get(State#state.bucket_name, Key),
+	    Return = if
+			 TypeReturns == key_value ->
+			     hd(get(State#state.bucket_name, Key));
+			 true ->
+			     Key
+		     end,
 	    ets:delete(State#state.bucket_name, Key),
 	    GC1 = queue:drop(State#state.gc),
-	    clean_older0(T_gc_ms, [{Key, Val}|Acc], State#state{gc = GC1});
+	    clean_older0(T_gc_ms, [Return|Acc], State#state{gc = GC1});
 	{value, _V}  ->
 	    terminate_clean_older(Acc, State)
     end.
 
-terminate_clean_older(_Keys, #state{gc_client=undefined}=State) ->
+terminate_clean_older(_Returns, #state{gc_client={undefined,_}}=State) ->
     State;
 terminate_clean_older([], State) ->
     State;
-terminate_clean_older(Keys, #state{gc_client=Pid, bucket_name=Bucket}=State) ->
-    erlang:send(Pid, {redi_gc, Bucket, Keys}),
+terminate_clean_older(Returns, #state{gc_client={Pid,_}, bucket_name=Bucket}=State) ->
+    erlang:send(Pid, {redi_gc, Bucket, Returns}),
     State.
 
 
