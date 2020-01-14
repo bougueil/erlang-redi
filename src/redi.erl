@@ -271,7 +271,7 @@ terminate_clean_older(Returns, #state{gc_client={Pid,_}, bucket_name=Bucket}=Sta
 
 
 create_bucket(Bucket_name, Bucket_type) ->
-    ets:new(Bucket_name, [Bucket_type, named_table, {read_concurrency, true}]).
+    ets:new(Bucket_name, [Bucket_type, named_table]).
 
 
 -ifdef(TEST).
