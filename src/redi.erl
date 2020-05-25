@@ -9,13 +9,13 @@
 
 %% API
 -export([start_link/0, start_link/1, start_link/2,
-	 stop/1,
+	 stop/1, child_spec/1,
 	 set/3, set/4,
 	 get/2,
 	 delete/2, size/1,
 	 get_bucket_name/1, add_bucket/2, add_bucket/3,
 	 gc_client/2, gc_client/3,
-	 dump/1]).
+	 all/1, dump/1]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -70,6 +70,13 @@ stop(Name) ->
 start_link(Name, Opts) ->
     gen_server:start_link({local, Name}, ?MODULE, [Opts], []).
 
+child_spec(Opts) ->
+    #{
+      id => ?MODULE,
+      start => {?MODULE, start_link, Opts},
+      shutdown => 500
+     }.
+
 -spec delete(Gen_server :: pid(), Key :: term()) -> ok.
 delete(Pid, Key) ->
     gen_server:call(Pid, {delete, Key}).
@@ -96,7 +103,7 @@ set(Pid, Key, Value) ->
 
 -spec set(Gen_server :: pid(), Key :: term(), Value :: term(), Bucket_name ::atom()) -> ok.
 set(Pid, Key, Value, Bucket_name) when is_atom(Bucket_name) ->
-    case ets:info(Bucket_name) of
+    case ets:info(Bucket_name, size) of
 	undefined ->
 	    {error, undefined_bucket};
 	_ ->
@@ -117,6 +124,10 @@ add_bucket(Pid, Bucket_name) ->
 
 add_bucket(Pid, Bucket_name, Bucket_type) ->
     gen_server:call(Pid, {add_bucket, Bucket_name, Bucket_type}).
+
+-spec all(Bucket_name :: atom()) -> list().
+all(Bucket_name) ->
+     ets:tab2list(Bucket_name).
 
 
 %%====================================================================

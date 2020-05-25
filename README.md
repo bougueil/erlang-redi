@@ -10,8 +10,7 @@ __Version:__ 1.0.0.
 
 Erlang and Elixir REDI implements a local cache with TTL.
 
-An entry TTL is not updated when the entry re-enters the cache.
-The typical usage is
+The typical usage is:
 ```
 case redi:get(..) of
      ..something_udefined.. ->
@@ -21,7 +20,7 @@ case redi:get(..) of
 end
 ```
 
-The cache is a gen_server that could be added to a supervision tree.
+Redi is a gen_server that could be added to a supervision tree.
 
 Example:
 ------
@@ -55,25 +54,17 @@ elixir:
 
 mix.exs
 
-```erlang
+```elixir
       {:redi, git: "git://github.com/bougueil/erlang-redi", app: false},
 ```
 
 application.ex 
 start redi inside a supervisor :
 
- ```erlang
- children = [
-     ...,
-     %{
-        id: :redi_id,
-        start:
-          {:redi, :start_link,
-           [
-             :mycache,  # the redi gen_server process name
-             %{bucket_name: :my_bucket_name, entry_ttl_ms: :timer.seconds(4000)}
-           ]}
-      },
-      ...
+ ```elixir
+  children = [
+     {:redi,
+         [:redi_dns,  # process name
+          %{bucket_name: :dns, entry_ttl_ms: :timer.minutes(5)} ]}
   ]
 ```      
