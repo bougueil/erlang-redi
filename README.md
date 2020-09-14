@@ -13,10 +13,11 @@ Erlang and Elixir REDI implements a local cache with TTL.
 The typical usage is:
 ```
 case redi:get(..) of
-     ..something_udefined.. ->
-       ..get the value from slow storage
+     [] ->
+       get the value from slow storage
        redi:set(..)
-     ..the_value -> .. use the value ...
+     [the_value] ->
+       use the value ...
 end
 ```
 

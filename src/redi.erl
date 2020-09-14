@@ -89,6 +89,9 @@ gc_client(Redi_pid, Client_pid) when is_pid(Client_pid) ->
 gc_client(Redi_pid, Client_pid, Opts) when is_pid(Client_pid), is_map(Opts) ->
     gen_server:call(Redi_pid, {gc_client, Client_pid, maps:get(returns, Opts)}).
 
+%% @doc
+%% returns ets:lookup(Bucket_name, Key)
+%%
 -spec get(Bucket_name :: atom(), Key :: term()) -> list().
 get(Bucket_name, Key) ->
     ets:lookup(Bucket_name, Key).
