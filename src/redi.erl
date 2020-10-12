@@ -77,8 +77,8 @@ child_spec(Opts) ->
       shutdown => 500
      }.
 
-%% helper if child_spec/2 is used multiple times in a supervisor
-child_spec(BucketName, TTL_ms) ->
+%% helper when using multiple instances of redi
+child_spec(BucketName, TTL_ms) when is_atom(BucketName) ->
     #{
       id => BucketName,
       start => {?MODULE, start_link, [BucketName,  #{bucket_name => BucketName, entry_ttl_ms => TTL_ms}]}
