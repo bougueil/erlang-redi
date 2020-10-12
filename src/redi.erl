@@ -9,7 +9,7 @@
 
 %% API
 -export([start_link/0, start_link/1, start_link/2,
-	 stop/1, child_spec/1,
+	 stop/1, child_spec/1, child_spec/2,
 	 set/3, set/4,
 	 get/2,
 	 delete/2, size/1,
@@ -75,6 +75,13 @@ child_spec(Opts) ->
       id => ?MODULE,
       start => {?MODULE, start_link, Opts},
       shutdown => 500
+     }.
+
+%% helper if child_spec/2 is used multiple times in a supervisor
+child_spec(BucketName, TTL_ms) ->
+    #{
+      id => BucketName,
+      start => {?MODULE, start_link, [BucketName,  #{bucket_name => BucketName, entry_ttl_ms => TTL_ms}]}
      }.
 
 -spec delete(Gen_server :: pid(), Key :: term()) -> ok.
