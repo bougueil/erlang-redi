@@ -11,6 +11,7 @@
 -export([start_link/0, start_link/1, start_link/2,
 	 stop/1, child_spec/1, child_spec/2,
 	 set/3, set/4,
+	 set_bulk/3, set_bulk/4,
 	 get/2,
 	 delete/2, size/1,
 	 get_bucket_name/1, add_bucket/2, add_bucket/3,
@@ -120,6 +121,20 @@ set(Pid, Key, Value, Bucket_name) when is_atom(Bucket_name) ->
 	    gen_server:call(Pid, {set, Key, Value, Bucket_name})
     end.
 
+-spec set_bulk(Gen_server :: pid(), Key :: term(), Value :: term()) -> ok.
+set_bulk(Pid, Key, Value) ->
+    gen_server:call(Pid, {set_bulk, Key, Value}).
+
+-spec set_bulk(Gen_server :: pid(), Key :: term(), Value :: term(), Bucket_name ::atom()) -> ok.
+set_bulk(Pid, Key, Value, Bucket_name) when is_atom(Bucket_name) ->
+    case ets:info(Bucket_name, size) of
+	undefined ->
+	    {error, undefined_bucket};
+	_ ->
+	    gen_server:call(Pid, {set_bulk, Key, Value, Bucket_name})
+    end.
+
+
 %% @doc get bucket name. Default is redi_keys
 %% the bucket name is required by get/2
 -spec get_bucket_name(Gen_server :: pid()) -> atom().
@@ -181,6 +196,14 @@ handle_call({set, Key, Value}, From, State) ->
 
 handle_call({set, Key, Value, Bucket_name}, _From, #state{gc=GC}=State) ->
     NewGC = do_insert_gc(?ts_ms(), Key, GC),
+    ets:insert(Bucket_name, {Key, Value}),
+    {reply, ok, State#state{gc=NewGC}};
+
+handle_call({set_bulk, Key, Value}, From, State) ->
+    handle_call({set_bulk, Key, Value, State#state.bucket_name}, From, State);
+
+handle_call({set_bulk, Key, Value, Bucket_name}, _From, #state{gc=GC, entry_ttl_ms=TTL}=State) ->
+    NewGC = do_insert_gc(?ts_ms() + rand:uniform(TTL), Key, GC),
     ets:insert(Bucket_name, {Key, Value}),
     {reply, ok, State#state{gc=NewGC}};
 
@@ -289,89 +312,5 @@ terminate_clean_older(Returns, #state{gc_client={Pid,_}, bucket_name=Bucket}=Sta
     erlang:send(Pid, {redi_gc, Bucket, Returns}),
     State.
 
-
-
 create_bucket(Bucket_name, Bucket_type) ->
     ets:new(Bucket_name, [Bucket_type, named_table]).
-
-
--ifdef(TEST).
--include_lib("eunit/include/eunit.hrl").
-
-
-redi_test() ->
-    Bucket_name = test,
-    TTL = 500,
-    {ok, Pid} = redi:start_link(#{bucket_name => Bucket_name,
-				  next_gc_ms => 100,
-				  entry_ttl_ms=> TTL}),
-    redi:gc_client(Pid, self()),
-    redi:set(Pid, <<"aaa">>, some_data),
-    redi:set(Pid, <<"aaa">>, some_data2),
-    redi:set(Pid, <<"bbb">>, some_data),
-
-    redi:set(Pid, <<"ccc">>, some_data),
-    redi:set(Pid, <<"ccc">>, some_data2),
-    redi:set(Pid, <<"ddd">>, some_data),
-    [{<<"aaa">>, some_data2}] = redi:get(Bucket_name, <<"aaa">>),
-    redi:delete(Pid, <<"aaa">>), 
-
-    ?assertEqual(redi:get(Bucket_name, <<"aaa">>), []),
-    ?assertEqual(redi:size(Bucket_name), 3),
-
-    %% wait data expiration
-    receive
-	{redi_gc, _, Keys} = Msg ->
-	    ?assertEqual(length(Keys), 5)
-    end,
-
-    ?assertEqual(redi:size(Bucket_name), 0),
-    ?assertEqual(redi:get(Bucket_name, <<"aaa">>), []),
-
-    %% multi buckets
-    redi:add_bucket(Pid, another_bucket, bag),
-    redi:set(Pid, <<"aaa">>, some_data, another_bucket),
-    ?assertEqual(redi:get(another_bucket, <<"aaa">>), [{<<"aaa">>, some_data}]),
-
-    redi:stop(Pid).
-
-heavy_test() ->
-    Pid_name = heavy_redi,
-    Bucket_name = test,
-    {ok, _Pid} = redi:start_link(Pid_name,
-				#{bucket_name => Bucket_name,
-				  next_gc_ms => 10000,
-				  entry_ttl_ms=> 30000}),
-    N = 20000,
-    Fun_writes = fun() ->
-		     [redi:set(Pid_name, <<I:40>>, {<<"data.", <<I:40>>/binary >>})
-		      || I <- lists:seq(1, N)]
-	     end,
-    Fun_reads = fun() ->
-		    [redi:get(Bucket_name, <<I:40>>) || I <- lists:seq(1, N)]
-	    end,
-
-    {Twrite, _} = timer:tc(Fun_writes),
-    ?debugFmt("throughput ~p writes/s.", [N * 1000000 div Twrite]),
-    {Tread, _} = timer:tc(Fun_reads),
-    ?debugFmt("throughput ~p reads/s.", [N * 1000000 div Tread]),
-    redi:stop(Pid_name).
-
-redi_2_set_test() ->
-    Bucket_name = test,
-    TTL = 1000,
-    {ok, Pid} = redi:start_link(#{bucket_name => Bucket_name,
-				  next_gc_ms => 100,
-				  entry_ttl_ms=> TTL}),
-
-    redi:set(Pid, <<"aaa">>, some_data),
-    timer:sleep(800),
-    redi:set(Pid, <<"aaa">>, some_data1),
-    timer:sleep(300),
-    redi:set(Pid, <<"aaa">>, some_data2),
-    ?assertEqual(redi:dump(Pid), {[{<<"aaa">>,some_data2}],2}),
-    timer:sleep(800),
-    ?assertEqual(redi:dump(Pid), {[],1}),
-    redi:stop(Pid).
-
--endif.
