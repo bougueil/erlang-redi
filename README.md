@@ -36,16 +36,16 @@ Bucket = test,
 {ok, Pid} = redi:start_link(#{bucket_name => Bucket,
 		       entry_ttl_ms=> 30000}),
 
-redi:set(Pid, <<"aaa">>, <<"data.aaa1">>), 
-redi:set(Pid, <<"aaa">>, <<"data.aaa2">>), 
-redi:set(Pid, <<"bbb">>, <<"data.xxl">>),
-redi:delete(Pid, <<"bbb">>),
-redi:get(Bucket, <<"aaa">>).
+redi:set(Pid, <<"key1">>, <<"data11">>),
+redi:set(Pid, <<"key1">>, <<"data12">>),
+redi:set(Pid, <<"key2">>, <<"moredata">>),
+redi:delete(Pid, <<"key2">>),
+redi:get(Bucket, <<"key1">>).
 
 %% working with several buckets
 redi:add_bucket(Pid, another_bucket, bag),
-redi:set(Pid, <<"aaa">>, <<"data.aaay">>, another_bucket),
-redi:get(another_bucket, <<"aaa">>).
+redi:set(Pid, <<"keyx">>, <<"data.aaay">>, another_bucket),
+redi:get(another_bucket, <<"keyx">>).
 ...
 ```
 $ rebar3 eunit

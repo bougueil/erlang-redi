@@ -60,6 +60,7 @@ stop(Name) ->
 %% @doc creates an REDI cache 
 %% Options are:
 %%  - `bucket_name' name of the ets table (used by get)
+%%  - `bucket_type' type of bucket, default to 'set'
 %%  - `entry_ttl_ms' the time to live of REDI elements
 %%  - `next_gc_ms' next interval time REDI will scan to remove oldest elements
 %%
@@ -99,6 +100,8 @@ gc_client(Redi_pid, Client_pid, Opts) when is_pid(Client_pid), is_map(Opts) ->
 
 %% @doc
 %% returns ets:lookup(Bucket_name, Key)
+%% returns [] if no entry is found
+%% returns [{key,data}, ..] if there is at least an entry
 %%
 -spec get(Bucket_name :: atom(), Key :: term()) -> list().
 get(Bucket_name, Key) ->
@@ -173,6 +176,7 @@ init([Opts]) ->
     Next_gc_ms = maps:get(next_gc_ms, Opts, ?GC_INTERVAL_MS),
     create_bucket(Bucket_name, Bucket_type),
     erlang:send_after(Next_gc_ms, self(), refresh_gc),
+    rand:seed(exrop),
     {ok, #state{
 	    next_gc_ms = Next_gc_ms,
 	    bucket_name = Bucket_name,
@@ -251,7 +255,8 @@ handle_info(refresh_gc, #state{entry_ttl_ms=TTL}=State) ->
 %% @private
 -spec terminate(Reason :: normal | shutdown | {shutdown, term()} | term(),
 		State :: term()) -> any().
-terminate(_Reason, _State) ->
+terminate(_Reason, #state{bucket_name=Tab} = State) ->
+    ets:delete(Tab),
     ok.
 
 %% @private

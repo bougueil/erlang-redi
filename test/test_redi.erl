@@ -35,6 +35,43 @@ redi_test() ->
 
     redi:stop(Pid).
 
+redi_bag_test() ->
+    Bucket_name = test,
+    Next_gc_ms = 20,
+    TTL = 10 * Next_gc_ms,
+    {ok, Pid} = redi:start_link(#{bucket_name => Bucket_name,
+				  bucket_type => bag,
+				  next_gc_ms => Next_gc_ms,
+				  entry_ttl_ms=> TTL}),
+    redi:gc_client(Pid, self()),
+    redi:set(Pid, <<"aaa">>, some_data),
+    redi:set(Pid, <<"aaa">>, some_data2),
+    redi:set(Pid, <<"bbb">>, some_data),
+
+    redi:set(Pid, <<"ccc">>, some_data),
+    redi:set(Pid, <<"ccc">>, some_data2),
+    redi:set(Pid, <<"ddd">>, some_data),
+    [{<<"aaa">>,some_data},{<<"aaa">>,some_data2}] = redi:get(Bucket_name, <<"aaa">>),
+    redi:delete(Pid, <<"aaa">>),
+
+    ?assertEqual(redi:get(Bucket_name, <<"aaa">>), []),
+    ?assertEqual(redi:size(Bucket_name), 4),
+
+     %% wait data expiration 5 keys
+    wait_N_gc(5, "redi_test"),
+
+    ?assertEqual(redi:size(Bucket_name), 0),
+    ?assertEqual(redi:get(Bucket_name, <<"aaa">>), []),
+
+    %% %% multi buckets
+    redi:add_bucket(Pid, another_bucket, bag),
+    redi:set(Pid, <<"aaa">>, data1, another_bucket),
+    redi:set(Pid, <<"aaa">>, data2, another_bucket),
+    ?assertEqual(redi:get(another_bucket, <<"aaa">>), [{<<"aaa">>, data1}, {<<"aaa">>, data2}]),
+
+    redi:stop(Pid).
+
+
 redi_bulk_test() ->
     Bucket_name = test,
     Next_gc_ms = 20,
