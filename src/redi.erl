@@ -256,7 +256,6 @@ handle_info(refresh_gc, #state{entry_ttl_ms=TTL}=State) ->
 -spec terminate(Reason :: normal | shutdown | {shutdown, term()} | term(),
 		State :: term()) -> any().
 terminate(_Reason, #state{bucket_name=Tab} = State) ->
-    ets:delete(Tab),
     ok.
 
 %% @private
