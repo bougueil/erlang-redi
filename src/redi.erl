@@ -290,20 +290,33 @@ clean_older0(T_gc_ms, Acc, #state{gc_client= undefined}= State) ->
     end;
 
 clean_older0(T_gc_ms, Acc, #state{gc_client= {_, TypeReturns}} = State) ->
-
     case queue:peek(State#state.gc_q) of
 	empty ->
 	    terminate_clean_older(Acc, State);
 	{value, _V ={Ts, Key}} when Ts < T_gc_ms ->
-	    Gc_ed_key = if
-			 TypeReturns == key_value ->
-			     hd(get(State#state.bucket_name, Key));
-			 true ->
-			     Key
-		     end,
-	    ets:delete(State#state.bucket_name, Key),
+
+	    Gc_ed_keys = case ets:lookup(State#state.bucket_name, Key) of
+			     [] ->
+				 Acc;
+			     [Key_value] ->
+				 ets:delete(State#state.bucket_name, Key),
+				 if
+				     TypeReturns == key_value ->
+					 [Key_value|Acc];
+				     true ->
+					 [Key|Acc]
+				 end;
+			     Key_values ->
+				 ets:delete(State#state.bucket_name, Key),
+				 if
+				     TypeReturns == key_value ->
+					 lists:append(Key_values,Acc);
+				     true ->
+					 [Key|Acc]
+				 end
+			 end,
 	    GC1_q = queue:drop(State#state.gc_q),
-	    clean_older0(T_gc_ms, [Gc_ed_key|Acc], State#state{gc_q = GC1_q});
+	    clean_older0(T_gc_ms, Gc_ed_keys, State#state{gc_q = GC1_q});
 	{value, _V}  ->
 	    terminate_clean_older(Acc, State)
     end.
