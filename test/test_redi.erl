@@ -22,9 +22,9 @@ redi_set_test() ->
     ?assertEqual(redi:get(Bucket_name, <<"set_a">>), []),
     ?assertEqual(redi:size(Bucket_name), 3),
 
-    %% 5 keys queued for gc
-    %% <<"set_d">>,<<"set_c">>,<<"set_c">>,<<"set_b">>,<<"set_a">>
-    wait_N_gc(5, Bucket_name),
+    %% 3 keys queued for gc (no multiple keys for set, no gc send for  <<"set_a">> ( deleted )
+    %% <<"set_d">>,<<"set_c">>,<<"set_b">>
+    wait_N_gc(3, Bucket_name),
 
     ?assertEqual(redi:size(Bucket_name), 0),
     ?assertEqual(redi:get(Bucket_name, <<"set_a">>), []),
@@ -44,7 +44,7 @@ redi_bag_test() ->
 				  bucket_type => bag,
 				  next_gc_ms => Next_gc_ms,
 				  entry_ttl_ms=> TTL}),
-    redi:gc_client(Pid, self()),
+    redi:gc_client(Pid, self(),  #{returns => key_value}),
     redi:set(Pid, <<"bag_a">>, some_data),
     redi:set(Pid, <<"bag_a">>, some_data2),
     redi:set(Pid, <<"bag_b">>, some_data),
@@ -59,8 +59,10 @@ redi_bag_test() ->
     ?assertEqual(redi:get(Bucket_name, <<"bag_a">>), []),
     ?assertEqual(redi:size(Bucket_name), 4),
 
-    %% 5 keys queued for gc
-    wait_N_gc(5, Bucket_name),
+    %% we register for gc with option #{returns => key_value} which gc will send all {key, value} that are gc'ed
+    %% 4 keys queued for gc <<"bag_b">> <<"bag_c">> <<"bag_c">> <<"bag_d">> because we subscribe for key_value
+    %% if we subscribe for key only 3 (distinct) keys will be sent
+    wait_N_gc(4, Bucket_name),
 
     ?assertEqual(redi:size(Bucket_name), 0),
     ?assertEqual(redi:get(Bucket_name, <<"bag_a">>), []),
@@ -95,8 +97,8 @@ redi_set_bulk_test() ->
     ?assertEqual(redi:get(Bucket_name, <<"bulk_a">>), []),
     ?assertEqual(redi:size(Bucket_name), 3),
 
-    %% 5 keys queued for gc
-    wait_N_gc(5, Bucket_name),
+    %% 3 keys queued for gc, see redi_set_test/1
+    wait_N_gc(3, Bucket_name),
 
     ?assertEqual(redi:size(Bucket_name), 0),
     ?assertEqual(redi:get(Bucket_name, <<"bulk_a">>), []),
@@ -155,6 +157,7 @@ wait_N_gc(0, Test_name) ->
 wait_N_gc(Num_keys, Test_name) ->
     receive
 	{redi_gc, _, Keys} ->
-	    ?debugFmt("~p rcv gc for keys ~p, remains: ~p keys", [Test_name, Keys, Num_keys - length(Keys) ]),
+	    ?debugFmt("~p rcv gc for ~p keys ~p, remains: ~p keys",
+		      [Test_name, length(Keys), Keys, Num_keys - length(Keys) ]),
  	    wait_N_gc(Num_keys - length(Keys), Test_name)
     end.
