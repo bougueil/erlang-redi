@@ -33,7 +33,7 @@
 -define(BUCKET_NAME, redi_keys).
 -define(BUCKET_TYPE, set).
 
--record(state, {next_gc_ms, entry_ttl_ms, bucket_name, gc, gc_client}).
+-record(state, {next_gc_ms, entry_ttl_ms, bucket_name, gc_q, gc_client}).
 
 
 
@@ -181,7 +181,7 @@ init([Opts]) ->
 	    next_gc_ms = Next_gc_ms,
 	    bucket_name = Bucket_name,
 	    entry_ttl_ms = maps:get(entry_ttl_ms, Opts, ?ENTRY_TTL),
-	    gc = queue:new()}}.
+	    gc_q = queue:new()}}.
 
 
 %% @private
@@ -198,21 +198,21 @@ init([Opts]) ->
 handle_call({set, Key, Value}, From, State) ->
     handle_call({set, Key, Value, State#state.bucket_name}, From, State);
 
-handle_call({set, Key, Value, Bucket_name}, _From, #state{gc=GC}=State) ->
-    NewGC = do_insert_gc(?ts_ms(), Key, GC),
+handle_call({set, Key, Value, Bucket_name}, _From, #state{gc_q=GC_q}=State) ->
+    NewGC_q = do_insert_gc(?ts_ms(), Key, GC_q),
     ets:insert(Bucket_name, {Key, Value}),
-    {reply, ok, State#state{gc=NewGC}};
+    {reply, ok, State#state{gc_q=NewGC_q}};
 
 handle_call({set_bulk, Key, Value}, From, State) ->
     handle_call({set_bulk, Key, Value, State#state.bucket_name}, From, State);
 
-handle_call({set_bulk, Key, Value, Bucket_name}, _From, #state{gc=GC, entry_ttl_ms=TTL}=State) ->
-    NewGC = do_insert_gc(?ts_ms() + rand:uniform(TTL), Key, GC),
+handle_call({set_bulk, Key, Value, Bucket_name}, _From, #state{gc_q=GC_q, entry_ttl_ms=TTL}=State) ->
+    NewGC_q = do_insert_gc(?ts_ms() + rand:uniform(TTL), Key, GC_q),
     ets:insert(Bucket_name, {Key, Value}),
-    {reply, ok, State#state{gc=NewGC}};
+    {reply, ok, State#state{gc_q=NewGC_q}};
 
-handle_call(dump, _From, #state{gc=GC, bucket_name=Bucket_name}=State) ->
-    {reply, {ets:tab2list(Bucket_name), queue:len(GC)}, State};
+handle_call(dump, _From, #state{gc_q=GC_q, bucket_name=Bucket_name}=State) ->
+    {reply, {ets:tab2list(Bucket_name), queue:len(GC_q)}, State};
 
 handle_call(get_bucket_name, _From, #state{bucket_name=Bucket_name}=State) ->
     {reply, Bucket_name, State};
@@ -224,10 +224,10 @@ handle_call({add_bucket, Bucket_name, Bucket_type}, _From, State) ->
 handle_call({gc_client, Pid, TypeReturns}, _From, State) ->
     {reply, ok,  State#state{gc_client={Pid, TypeReturns}}};
 
-handle_call({delete, Key}, _From, #state{gc=GC, bucket_name=Bucket_name}=State) ->
+handle_call({delete, Key}, _From, #state{gc_q=GC_q, bucket_name=Bucket_name}=State) ->
     ets:delete(Bucket_name, Key),
-    NewGC = queue:from_list(lists:keydelete(Key, 2, queue:to_list(GC))),
-    {reply, ok,  State#state{gc=NewGC}}.
+    NewGC_q = queue:from_list(lists:keydelete(Key, 2, queue:to_list(GC_q))),
+    {reply, ok,  State#state{gc_q=NewGC_q}}.
 
 
 %% @private
@@ -272,48 +272,48 @@ format_status(_Opt, Status) ->
     Status.
 
 
-do_insert_gc(Ts, Key, GC) when Ts  <  ?ts_non_gc ->
-    queue:in({Ts,Key}, GC);
-do_insert_gc(_Ts, _Key, GC) -> GC.
+do_insert_gc(Ts, Key, GC_q) when Ts  <  ?ts_non_gc ->
+    queue:in({Ts,Key}, GC_q);
+do_insert_gc(_Ts, _Key, GC_q) -> GC_q.
 
 clean_older0(T_gc_ms, Acc, #state{gc_client= undefined}= State) ->
 
-    case queue:peek(State#state.gc) of
+    case queue:peek(State#state.gc_q) of
 	empty ->
 	    State;
 	{value, _V ={Ts, Key}} when Ts < T_gc_ms ->
 	    ets:delete(State#state.bucket_name, Key),
-	    GC1 = queue:drop(State#state.gc),
-	    clean_older0(T_gc_ms, Acc, State#state{gc = GC1});
+	    GC1_q = queue:drop(State#state.gc_q),
+	    clean_older0(T_gc_ms, Acc, State#state{gc_q = GC1_q});
 	{value, _V}  ->
 	     State
     end;
 
 clean_older0(T_gc_ms, Acc, #state{gc_client= {_, TypeReturns}} = State) ->
 
-    case queue:peek(State#state.gc) of
+    case queue:peek(State#state.gc_q) of
 	empty ->
 	    terminate_clean_older(Acc, State);
 	{value, _V ={Ts, Key}} when Ts < T_gc_ms ->
-	    Return = if
+	    Gc_ed_key = if
 			 TypeReturns == key_value ->
 			     hd(get(State#state.bucket_name, Key));
 			 true ->
 			     Key
 		     end,
 	    ets:delete(State#state.bucket_name, Key),
-	    GC1 = queue:drop(State#state.gc),
-	    clean_older0(T_gc_ms, [Return|Acc], State#state{gc = GC1});
+	    GC1_q = queue:drop(State#state.gc_q),
+	    clean_older0(T_gc_ms, [Gc_ed_key|Acc], State#state{gc_q = GC1_q});
 	{value, _V}  ->
 	    terminate_clean_older(Acc, State)
     end.
 
-terminate_clean_older(_Returns, #state{gc_client={undefined,_}}=State) ->
+terminate_clean_older(_Gc_ed_keys, #state{gc_client={undefined,_}}=State) ->
     State;
 terminate_clean_older([], State) ->
     State;
-terminate_clean_older(Returns, #state{gc_client={Pid,_}, bucket_name=Bucket}=State) ->
-    erlang:send(Pid, {redi_gc, Bucket, Returns}),
+terminate_clean_older(Gc_ed_keys, #state{gc_client={Pid,_}, bucket_name=Bucket}=State) ->
+    erlang:send(Pid, {redi_gc, Bucket, Gc_ed_keys}),
     State.
 
 create_bucket(Bucket_name, Bucket_type) ->
