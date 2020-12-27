@@ -4,7 +4,7 @@
 
 Copyright (c) 2019 Renaud Mariana.
 
-__Version:__ 1.0.0.
+__Version:__ 0.9.0.
 
 ## Erlang and Elixir REDI
 
@@ -49,6 +49,19 @@ redi:get(another_bucket, <<"keyx">>).
 ...
 ```
 $ rebar3 eunit
+
+Registering to keys that are GCed
+------
+
+```erlang
+redi:gc_client(Redi_Pid, self(), Opts).
+
+receive
+	{redi_gc, _, Keys} -> ok
+
+%% see more examples in unit tests
+```
+
 
 elixir:
 ------
