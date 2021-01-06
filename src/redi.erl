@@ -159,7 +159,7 @@ all(Bucket_name) ->
      ets:tab2list(Bucket_name).
 
 %% @doc get value from Key / Bucket_name
-%% if key is missing, call Fallback/1 to update the cache
+%% if key is missing, call Fallback(Key) to update the cache
 %% Returns the value
 -spec get_maybe_update(Bucket_name :: atom(), Key :: term(), Fallback :: fun() ) -> term().
 get_maybe_update(Key, Bucket, Fallback) when is_atom(Bucket), is_function(Fallback, 1) ->
