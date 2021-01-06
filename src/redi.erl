@@ -16,7 +16,8 @@
 	 delete/2, size/1,
 	 get_bucket_name/1, add_bucket/2, add_bucket/3,
 	 gc_client/2, gc_client/3,
-	 all/1, dump/1]).
+	 all/1, dump/1,
+	 get_maybe_update/3]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -157,6 +158,19 @@ add_bucket(Pid, Bucket_name, Bucket_type) ->
 all(Bucket_name) ->
      ets:tab2list(Bucket_name).
 
+%% @doc get value from Key / Bucket_name
+%% if key is missing, call Fallback/1 to update the cache
+%% Returns the value
+-spec get_maybe_update(Bucket_name :: atom(), Key :: term(), Fallback :: fun() ) -> term().
+get_maybe_update(Key, Bucket, Fallback) when is_atom(Bucket), is_function(Fallback, 1) ->
+    case redi:get(Bucket, Key) of
+	[] ->
+	    Val = Fallback(Key),
+	    redi:set(Bucket, Key, Val),
+	    Val;
+	[{_,Val}] ->
+	    Val
+    end.
 
 %%====================================================================
 %% Internal functions
