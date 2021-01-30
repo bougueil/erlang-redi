@@ -1,6 +1,6 @@
 
 
-# Erlang REDI: an ETS (local) cache without REDIS#
+# Erlang REDI: an ETS cache without REDIS
 
 Copyright (c) 2019 Renaud Mariana.
 
@@ -8,7 +8,7 @@ __Version:__ 0.9.0.
 
 ## Erlang REDI
 
-An erlang ETS (local) cache with TTL and without Redis.
+An erlang ETS cache with TTL.
 
 The typical usage is:
 ```
