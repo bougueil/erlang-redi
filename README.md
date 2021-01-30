@@ -1,14 +1,14 @@
 
 
-# Erlang and Elixir REDI: a local cache "a la Redis" . #
+# Erlang REDI: an ETS (local) cache without REDIS#
 
 Copyright (c) 2019 Renaud Mariana.
 
 __Version:__ 0.9.0.
 
-## Erlang and Elixir REDI
+## Erlang REDI
 
-Erlang and Elixir REDI implements a local cache with TTL.
+An erlang ETS (local) cache with TTL and without Redis.
 
 The typical usage is:
 ```
@@ -16,8 +16,8 @@ case redi:get(..) of
      [] ->
        get the value from slow storage
        redi:set(..)
-     [the_value] ->
-       use the value ...
+     [value] ->
+       use value ...
 end
 ```
 
