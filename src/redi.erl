@@ -29,7 +29,7 @@
 -define(ts_non_gc,  (?ts_max - 256)). %% 256 non gc ts values
 
 %% default configuration values
--define(ENTRY_TTL_MS, timer:hour(1)).
+-define(ENTRY_TTL_MS, timer:hours(1)).
 -define(GC_INTERVAL_MS, timer:seconds(30)).
 -define(BUCKET_NAME, redi_keys).
 -define(BUCKET_TYPE, set).
