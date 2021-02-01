@@ -29,7 +29,7 @@
 -define(ts_non_gc,  (?ts_max - 256)). %% 256 non gc ts values
 
 %% default configuration values
--define(ENTRY_TTL, timer:hour(1)).
+-define(ENTRY_TTL_MS, timer:hour(1)).
 -define(GC_INTERVAL_MS, timer:seconds(30)).
 -define(BUCKET_NAME, redi_keys).
 -define(BUCKET_TYPE, set).
@@ -194,7 +194,7 @@ init([Opts]) ->
     {ok, #state{
 	    next_gc_ms = Next_gc_ms,
 	    bucket_name = Bucket_name,
-	    entry_ttl_ms = maps:get(entry_ttl_ms, Opts, ?ENTRY_TTL),
+	    entry_ttl_ms = maps:get(entry_ttl_ms, Opts, ?ENTRY_TTL_MS),
 	    gc_q = queue:new()}}.
 
 
