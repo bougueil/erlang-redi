@@ -1,10 +1,11 @@
-
-
 # Erlang REDI: an ETS cache without REDIS
 
-Copyright (c) 2019 Renaud Mariana.
+Copyright (c) 2019-21 Renaud Mariana.
 
 __Version:__ 0.9.0.
+
+[![Erlang CI](https://github.com/bougueil/erlang-redi/actions/workflows/ci.yml/badge.svg)](https://github.com/bougueil/erlang-redi/actions/workflows/ci.yml)
+
 
 ## Erlang REDI
 
