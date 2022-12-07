@@ -27,11 +27,10 @@ Redi is a gen_server that could be added to a supervision tree.
 Example:
 ------
 
-Its usage is very simple.
-
-$ rebar3 shell
+Its usage is very simple :
 
 ```erlang
+$ rebar3 shell
 
 Bucket = test,
 {ok, Pid} = redi:start_link(#{bucket_name => Bucket,
@@ -49,7 +48,13 @@ redi:set(Pid, <<"keyx">>, <<"data.aaay">>, another_bucket),
 redi:get(another_bucket, <<"keyx">>).
 ...
 ```
-$ rebar3 eunit
+
+Performance
+--------
+Excerpt from a run of the unit test (i5-1235U)
+
+- throughput 363464 writes/s.
+- throughput **3478260** reads/s.
 
 Registering to keys that are GCed
 ------
