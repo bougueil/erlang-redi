@@ -72,19 +72,20 @@ receive
 elixir:
 ------
 
-mix.exs
-
 ```elixir
-      {:redi, git: "git://github.com/bougueil/erlang-redi", app: false},
+# mix.exs
+
+{:redi, git: "git://github.com/bougueil/erlang-redi", app: false},
 ```
 
-application.ex 
-start redi inside a supervisor :
+starting redi inside a supervisor :
 
- ```elixir
-  children = [
+```elixir
+# application.ex 
+
+children = [
      {:redi,
          [:redi_dns,  # process name
           %{bucket_name: :dns, entry_ttl_ms: :timer.minutes(5)} ]}
-  ]
+]
 ```      
