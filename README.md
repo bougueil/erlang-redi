@@ -22,6 +22,8 @@ case redi:get(..) of
 end
 ```
 
+This service ensures that data hold by the cache are `fresh enough` (<= TTL) and ***doesn't garantee*** that data are still in sync with the underlying storage, but this is good enough in our use cases.
+
 Redi is a gen_server that could be added to a supervision tree.
 
 Example:
