@@ -77,7 +77,7 @@ elixir:
 ```elixir
 # mix.exs
 
-{:redi, git: "git://github.com/bougueil/erlang-redi", app: false},
+{:redi, git: "https://github.com/bougueil/erlang-redi", app: false},
 ```
 
 starting redi inside a supervisor :
