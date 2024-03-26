@@ -1,9 +1,8 @@
 # Erlang REDI: an ETS cache without REDIS
 
-Copyright (c) 2019-21 Renaud Mariana.
+Copyright (c) 2019-24 Renaud Mariana.
 
-__Version:__ 0.9.0.
-
+[![hex.pm badge](https://img.shields.io/badge/Package%20on%20hex.pm-informational)](https://hex.pm/packages/redi)
 [![Erlang CI](https://github.com/bougueil/erlang-redi/actions/workflows/ci.yml/badge.svg)](https://github.com/bougueil/erlang-redi/actions/workflows/ci.yml)
 
 
