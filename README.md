@@ -7,7 +7,7 @@ __Version:__ 0.9.0.
 [![Erlang CI](https://github.com/bougueil/erlang-redi/actions/workflows/ci.yml/badge.svg)](https://github.com/bougueil/erlang-redi/actions/workflows/ci.yml)
 
 
-## Erlang REDI
+## Erlang Redi
 
 An erlang ETS cache with TTL.
 
@@ -26,8 +26,8 @@ This service ensures that data hold by the cache are `fresh enough` (<= TTL) and
 
 Redi is a gen_server that could be added to a supervision tree.
 
-Example:
-------
+### Example:
+
 
 Its usage is very simple :
 
@@ -51,15 +51,14 @@ redi:get(another_bucket, <<"keyx">>).
 ...
 ```
 
-Performance
---------
+### Performance
+
 Excerpt from a run of the unit test (i5-1235U)
 
 - throughput 363464 writes/s.
 - throughput **3478260** reads/s.
 
-Registering to keys that are GCed
-------
+### Registering to keys that are GCed
 
 ```erlang
 redi:gc_client(Redi_Pid, self(), Opts).
@@ -70,17 +69,19 @@ receive
 %% see more examples in unit tests
 ```
 
+## Elixir
 
-elixir:
-------
+Redi requires Elixir v1.15 or later. Then add Redi as a dependency:
 
 ```elixir
-# mix.exs
-
-{:redi, git: "https://github.com/bougueil/erlang-redi", app: false},
+def deps do
+  [
+    {:redi, "~> 0.8.1"},
+  ]
+end
 ```
 
-starting redi inside a supervisor :
+### Starting Redi inside a supervisor :
 
 ```elixir
 # application.ex 

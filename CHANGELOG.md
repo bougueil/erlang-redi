@@ -1,4 +1,5 @@
-## 0.9.0 (2020-12-27)
+## 0.8.1 (2024-03-26)
+### hex.publish
 
 ### Enhancements
   - Add redi:gc_client/3 to register for gc'ed key
