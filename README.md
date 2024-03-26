@@ -87,7 +87,12 @@ end
 
 children = [
      {:redi,
-         [:redi_dns,  # process name
+         [:redi_dns,  # 
           %{bucket_name: :dns, entry_ttl_ms: :timer.minutes(5)} ]}
 ]
 ```      
+then Redi can be used as:
+```elixir
+:redi.set(Process.whereis(:redi_dns), "mykey", "a_value")
+:redi.get(:dns, "mykey")
+```
