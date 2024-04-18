@@ -15,13 +15,13 @@
     set/3, set/4,
     set_bulk/3, set_bulk/4,
     get/2,
-    delete/2,
+    delete/2, delete/3,
     size/1,
     get_bucket_name/1,
     add_bucket/2, add_bucket/3,
     gc_client/2, gc_client/3,
     all/1,
-    dump/1,
+    dump/1, dump/2,
     get_maybe_update/3
 ]).
 
@@ -104,9 +104,17 @@ child_spec(BucketName, TTL_ms) when is_atom(BucketName) ->
             ]}
     }.
 
--spec delete(Gen_server :: pid(), Key :: term()) -> ok.
+-spec delete(Gen_server :: pid(), Key :: term()) -> ok | {error, undefined_bucket}.
 delete(Pid, Key) ->
     gen_server:call(Pid, {delete, Key}).
+-spec delete(Gen_server :: pid(), Key :: term(), atom()) -> ok.
+delete(Pid, Key, Bucket_name) when is_atom(Bucket_name) ->
+    case ets:info(Bucket_name, size) of
+        undefined ->
+            {error, undefined_bucket};
+        _ ->
+            gen_server:call(Pid, {delete, Key, Bucket_name})
+    end.
 
 -spec gc_client(Gen_server :: pid(), Client :: pid()) -> ok.
 gc_client(Redi_pid, Client_pid) when is_pid(Client_pid) ->
@@ -161,12 +169,17 @@ set_bulk(Pid, Key, Value, Bucket_name) when is_atom(Bucket_name) ->
 get_bucket_name(Pid) ->
     gen_server:call(Pid, get_bucket_name).
 
+%% debug purpose, returns {list_of_kvalues, gc_entry_length}
 dump(Pid) ->
     gen_server:call(Pid, dump).
+dump(Pid, Bucket_name) ->
+    gen_server:call(Pid, {dump, Bucket_name}).
 
+-spec add_bucket(Gen_server :: pid(), atom()) -> atom().
 add_bucket(Pid, Bucket_name) ->
     add_bucket(Pid, Bucket_name, ?BUCKET_TYPE).
 
+-spec add_bucket(Gen_server :: pid(), atom(), atom()) -> atom().
 add_bucket(Pid, Bucket_name, Bucket_type) ->
     gen_server:call(Pid, {add_bucket, Bucket_name, Bucket_type}).
 
@@ -226,10 +239,12 @@ init([Opts]) ->
     | {stop, Reason :: term(), Reply :: term(), NewState :: term()}
     | {stop, Reason :: term(), NewState :: term()}.
 
-handle_call({set, Key, Value}, From, State) ->
-    handle_call({set, Key, Value, State#state.bucket_name}, From, State);
-handle_call({set, Key, Value, Bucket_name}, _From, #state{gc_q = GC_q} = State) ->
+handle_call({set, Key, Value}, _From, #state{gc_q = GC_q, bucket_name = Bucket_name} = State) ->
     NewGC_q = do_insert_gc(?ts_ms(), Key, GC_q),
+    ets:insert(Bucket_name, {Key, Value}),
+    {reply, ok, State#state{gc_q = NewGC_q}};
+handle_call({set, Key, Value, Bucket_name}, _From, #state{gc_q = GC_q} = State) ->
+    NewGC_q = do_insert_gc(?ts_ms(), {Key, Bucket_name}, GC_q),
     ets:insert(Bucket_name, {Key, Value}),
     {reply, ok, State#state{gc_q = NewGC_q}};
 handle_call({set_bulk, Key, Value}, From, State) ->
@@ -241,7 +256,9 @@ handle_call(
     ets:insert(Bucket_name, {Key, Value}),
     {reply, ok, State#state{gc_q = NewGC_q}};
 handle_call(dump, _From, #state{gc_q = GC_q, bucket_name = Bucket_name} = State) ->
-    {reply, {ets:tab2list(Bucket_name), queue:len(GC_q)}, State};
+    {reply, {ets:tab2list(Bucket_name), queue:to_list(GC_q)}, State};
+handle_call({dump, Bucket_name}, _From, #state{gc_q = GC_q} = State) ->
+    {reply, {ets:tab2list(Bucket_name), queue:to_list(GC_q)}, State};
 handle_call(get_bucket_name, _From, #state{bucket_name = Bucket_name} = State) ->
     {reply, Bucket_name, State};
 handle_call({add_bucket, Bucket_name, Bucket_type}, _From, State) ->
@@ -250,6 +267,10 @@ handle_call({add_bucket, Bucket_name, Bucket_type}, _From, State) ->
 handle_call({gc_client, Pid, TypeReturns}, _From, State) ->
     {reply, ok, State#state{gc_client = {Pid, TypeReturns}}};
 handle_call({delete, Key}, _From, #state{gc_q = GC_q, bucket_name = Bucket_name} = State) ->
+    ets:delete(Bucket_name, Key),
+    NewGC_q = queue:from_list(lists:keydelete(Key, 2, queue:to_list(GC_q))),
+    {reply, ok, State#state{gc_q = NewGC_q}};
+handle_call({delete, Key, Bucket_name}, _From, #state{gc_q = GC_q} = State) ->
     ets:delete(Bucket_name, Key),
     NewGC_q = queue:from_list(lists:keydelete(Key, 2, queue:to_list(GC_q))),
     {reply, ok, State#state{gc_q = NewGC_q}}.
@@ -306,10 +327,19 @@ do_insert_gc(Ts, Key, GC_q) when Ts < ?ts_non_gc ->
 do_insert_gc(_Ts, _Key, GC_q) ->
     GC_q.
 
+extract_key_bucket({Key, Bucket}, _State) ->
+    {Key, Bucket};
+extract_key_bucket(Key, State) ->
+    {Key, State#state.bucket_name}.
+
 clean_older0(T_gc_ms, Acc, #state{gc_client = undefined} = State) ->
     case queue:peek(State#state.gc_q) of
         empty ->
             State;
+        {value, _V = {Ts, {Key, Bucket_name}}} when Ts < T_gc_ms ->
+            ets:delete(Bucket_name, Key),
+            GC1_q = queue:drop(State#state.gc_q),
+            clean_older0(T_gc_ms, Acc, State#state{gc_q = GC1_q});
         {value, _V = {Ts, Key}} when Ts < T_gc_ms ->
             ets:delete(State#state.bucket_name, Key),
             GC1_q = queue:drop(State#state.gc_q),
@@ -321,13 +351,14 @@ clean_older0(T_gc_ms, Acc, #state{gc_client = {_, TypeReturns}} = State) ->
     case queue:peek(State#state.gc_q) of
         empty ->
             terminate_clean_older(Acc, State);
-        {value, _V = {Ts, Key}} when Ts < T_gc_ms ->
+        {value, _V = {Ts, KeyM}} when Ts < T_gc_ms ->
+            {Key, Bucket_name} = extract_key_bucket(KeyM, State),
             Gc_ed_keys =
-                case ets:lookup(State#state.bucket_name, Key) of
+                case ets:lookup(Bucket_name, Key) of
                     [] ->
                         Acc;
                     [Key_value] ->
-                        ets:delete(State#state.bucket_name, Key),
+                        ets:delete(Bucket_name, Key),
                         if
                             TypeReturns == key_value ->
                                 [Key_value | Acc];
@@ -335,7 +366,7 @@ clean_older0(T_gc_ms, Acc, #state{gc_client = {_, TypeReturns}} = State) ->
                                 [Key | Acc]
                         end;
                     Key_values ->
-                        ets:delete(State#state.bucket_name, Key),
+                        ets:delete(Bucket_name, Key),
                         if
                             TypeReturns == key_value ->
                                 lists:append(Key_values, Acc);
