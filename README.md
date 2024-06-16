@@ -75,7 +75,7 @@ Redi requires Elixir v1.15 or later. Then add Redi as a dependency:
 ```elixir
 def deps do
   [
-    {:redi, "~> 0.8.1"},
+    {:redi, "~> 0.8"},
   ]
 end
 ```

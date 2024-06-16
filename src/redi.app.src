@@ -1,6 +1,6 @@
 {application, 'redi', [
     {description, "a Redis subset with global TTL"},
-    {vsn, "0.8.1"},
+    {vsn, "0.8.2"},
     {registered, []},
     {applications, [
         kernel,

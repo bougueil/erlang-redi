@@ -1,7 +1,7 @@
 defmodule Redi.MixProject do
   use Mix.Project
 
-  @version "0.8.1"
+  @version "0.8.2"
   def project do
     [
       app: :redi,
@@ -27,7 +27,7 @@ defmodule Redi.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:ex_doc, "~> 0.31", only: :docs}
+      {:ex_doc, "~> 0.34", only: :docs}
     ]
   end
 
