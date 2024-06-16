@@ -32,8 +32,7 @@
     handle_cast/2,
     handle_info/2,
     terminate/2,
-    code_change/3,
-    format_status/2
+    code_change/3
 ]).
 
 -define(SERVER, ?MODULE).
@@ -314,13 +313,6 @@ terminate(_Reason, _State) ->
     | {error, Reason :: term()}.
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
-
--spec format_status(
-    Opt :: normal | terminate,
-    Status :: list()
-) -> Status :: term().
-format_status(_Opt, Status) ->
-    Status.
 
 do_insert_gc(Ts, Key, GC_q) when Ts < ?ts_non_gc ->
     queue:in({Ts, Key}, GC_q);
